@@ -11,39 +11,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func scrape(token string) []discord.User {
-	d, _ := discord.NewDiscord(token, "")
-	s, x, err := d.JoinServer(config.Friender.Invite, data)
-	if utils.HandleError(err) {
-		return []discord.User{}
-	}
-
-	if s {
-		console.Log("SCC", "joined server to scrape", map[string]string{
-			"invite": config.Friender.Invite,
-			"token":  token[:32] + "****",
-		})
-	} else {
-		console.Log("DBG", "failed to join server to scrape", map[string]string{
-			"reason": x,
-			"token":  token[:32] + "****",
-		})
-
-		return []discord.User{}
-	}
-
-	sock := discord.NewDiscordSocket(token, data.Guild.ID, data.Channel.ID)
-	sock.Run()
-
-	console.Log("SCC", "scraped", map[string]string{
-		"users":     fmt.Sprint(len(sock.Users)),
-		"guildID":   data.Guild.ID,
-		"channelID": data.Channel.ID,
-	})
-
-	return sock.Users
-}
-
 func checkIfInBlacklist(x string) bool {
 	for _, id := range config.Friender.BlacklistID {
 		if id == x {
@@ -65,25 +32,22 @@ func main() {
 	tokens, _ = utils.NewFromFile("../../assets/tokens.txt")
 	proxies, _ = utils.NewFromFile("../../assets/proxies.txt")
 
-	p, _ := proxies.Next()
-	t1, _ := tokens.Next()
-	d, _ := discord.NewDiscord(t1, "http://"+p)
-	data, _ = d.CheckInvite(config.Friender.Invite)
-
-	console.Log("SCC", "got guild info!", map[string]string{
-		"invite": config.Friender.Invite,
-	})
-
-	t, _ := tokens.Next()
-	usrs := scrape(t)
 	xx := 0
-	for _, token := range tokens.List {
+	for i, token := range tokens.List {
 		sent := 0
 
 		prox, _ := proxies.Next()
 		disc, err := discord.NewDiscord(token, "http://"+prox)
 		if utils.HandleError(err) {
 			continue
+		}
+
+		if i == 0 {
+			data, _ = disc.CheckInvite(config.Friender.Invite)
+
+			console.Log("SCC", "got guild info!", map[string]string{
+				"invite": config.Friender.Invite,
+			})
 		}
 
 		s, x, err := disc.JoinServer(config.Friender.Invite, data)
@@ -103,6 +67,19 @@ func main() {
 			})
 
 			continue
+		}
+
+		if i == 0 {
+			sock := discord.NewDiscordSocket(token, data.Guild.ID, data.Channel.ID)
+			sock.Run()
+
+			console.Log("SCC", "scraped", map[string]string{
+				"users":     fmt.Sprint(len(sock.Users)),
+				"guildID":   data.Guild.ID,
+				"channelID": data.Channel.ID,
+			})
+
+			usrs = sock.Users
 		}
 
 		retries := 0

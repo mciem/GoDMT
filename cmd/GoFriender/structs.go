@@ -30,4 +30,5 @@ var (
 	tokens  *utils.Cycle
 	proxies *utils.Cycle
 	data    discord.InviteData
+	usrs    []discord.User
 )
