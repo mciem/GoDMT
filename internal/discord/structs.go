@@ -1,5 +1,31 @@
 package discord
 
+import (
+	"encoding/base64"
+	"encoding/json"
+)
+
+type DisplayNamePayload struct {
+	GlobalName string `json:"global_name"`
+}
+
+type BioPayload struct {
+	Bio string `json:"bio"`
+}
+
+type SendMessagePayload struct {
+	Content string `json:"content"`
+	Tts     bool   `json:"tts"`
+}
+
+type CreateChannelPayload struct {
+	Recipients []string `json:"recipients"`
+}
+
+type CreateChannelResponse struct {
+	ID string `json:"id"`
+}
+
 type WebsocketSessionResponse struct {
 	D D1 `json:"d"`
 }
@@ -33,17 +59,17 @@ type D struct {
 }
 
 type InviteData struct {
-	Type                     int     `json:"type"`
-	Code                     string  `json:"code"`
-	ExpiresAt                any     `json:"expires_at"`
-	Guild                    Guild   `json:"guild"`
-	GuildID                  string  `json:"guild_id"`
-	Channel                  Channel `json:"channel"`
-	ApproximateMemberCount   int     `json:"approximate_member_count"`
-	ApproximatePresenceCount int     `json:"approximate_presence_count"`
+	Type                     int      `json:"type"`
+	Code                     string   `json:"code"`
+	ExpiresAt                any      `json:"expires_at"`
+	Guild                    GuildUno `json:"guild"`
+	GuildID                  string   `json:"guild_id"`
+	Channel                  Channel  `json:"channel"`
+	ApproximateMemberCount   int      `json:"approximate_member_count"`
+	ApproximatePresenceCount int      `json:"approximate_presence_count"`
 }
 
-type Guild struct {
+type GuildUno struct {
 	ID                       string   `json:"id"`
 	Name                     string   `json:"name"`
 	Splash                   any      `json:"splash"`
@@ -62,6 +88,30 @@ type Channel struct {
 	ID   string `json:"id"`
 	Type int    `json:"type"`
 	Name string `json:"name"`
+}
+
+type XContext struct {
+	Location            string `json:"location"`
+	LocationGuildID     string `json:"location_guild_id"`
+	LocationChannelID   string `json:"location_channel_id"`
+	LocationChannelType int    `json:"location_channel_type"`
+}
+
+type FriendRequestPayload struct {
+	Username      string `json:"username"`
+	Discriminator any    `json:"discriminator"`
+}
+
+func BuildXContext(invD InviteData) string {
+	pd, _ := json.Marshal(XContext{
+		Location:            "Join Guild",
+		LocationGuildID:     invD.Guild.ID,
+		LocationChannelID:   invD.Channel.ID,
+		LocationChannelType: invD.Channel.Type,
+	})
+
+	return base64.RawStdEncoding.EncodeToString(pd)
+
 }
 
 var (

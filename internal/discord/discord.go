@@ -108,20 +108,22 @@ func (d *Discord) initClient() error {
 	d.Headers["x-discord-timezone"] = "Europe/Warsaw"
 	d.Headers["x-super-properties"] = d.XSup
 
-	d.Headers["authorization"] = d.Token
+	if d.Token != "" {
+		d.Headers["authorization"] = d.Token
 
-	sess, err := d.OnlineToken()
-	if err != nil {
-		return err
+		sess, err := d.OnlineToken()
+		if err != nil {
+			return err
+		}
+
+		d.SessionID = sess
 	}
-
-	d.SessionID = sess
 
 	return nil
 }
 
 func (d *Discord) CheckInvite(invite string) (InviteData, error) {
-	req, err := http.NewRequest(http.MethodPost, "https://discord.com/api/v9/invites/"+invite+"?with_counts=true&with_expiration=true", bytes.NewReader([]byte{}))
+	req, err := http.NewRequest(http.MethodPost, "https://discord.com/api/v9/invites/"+invite+"?with_counts=true&with_expiration=true", bytes.NewReader([]byte("{}")))
 	if err != nil {
 		return InviteData{}, err
 	}
@@ -150,24 +152,17 @@ func (d *Discord) CheckInvite(invite string) (InviteData, error) {
 	return invD, nil
 }
 
-func (d *Discord) JoinServer(invite string) (bool, string, error) {
+func (d *Discord) JoinServer(invite string, data InviteData) (bool, string, error) {
 	headers := d.Headers
 
 	headers["referer"] = "https://discord.com/invite/" + invite
-
-	invD, err := d.CheckInvite(invite)
-	if err != nil {
-		return false, "", err
-	}
-
-	headers["x-context-properties"] = utils.BuildXContext(invD)
+	headers["x-context-properties"] = BuildXContext(data)
 
 	pd, er := json.Marshal(D1{
 		Session_id: d.SessionID,
 	})
-
 	if er != nil {
-		return false, "", err
+		return false, "", er
 	}
 
 	req, err := http.NewRequest(http.MethodPost, "https://discord.com/api/v9/invites/"+invite, bytes.NewReader(pd))
@@ -191,7 +186,185 @@ func (d *Discord) JoinServer(invite string) (bool, string, error) {
 	s, x := utils.HandleStatusCode(r.StatusCode, "join")
 
 	return s, x, nil
+}
 
+func (d *Discord) SendFriendRequest(id string, gID string, cID string) (bool, string, error) {
+	headers := d.Headers
+
+	headers["referer"] = "https://discord.com/channels/" + gID + "/" + cID
+	headers["x-context-properties"] = "eyJsb2NhdGlvbiI6IlVzZXIgUHJvZmlsZSJ9"
+
+	req, err := http.NewRequest(http.MethodPut, "https://discord.com/api/v9/users/@me/relationships/"+id, bytes.NewReader([]byte("{}")))
+	if err != nil {
+		return false, "", err
+	}
+
+	req.Header = http.Header{
+		http.HeaderOrderKey: headerOrder,
+	}
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	r, errs := d.Client.Do(req)
+	if errs != nil {
+		return false, "", err
+	}
+
+	s, x := utils.HandleStatusCode(r.StatusCode, "send friend req")
+
+	return s, x, nil
+
+}
+
+func (d *Discord) CreateChannel(id string, gID string, cID string) (bool, string, string, error) {
+	headers := d.Headers
+
+	headers["referer"] = "https://discord.com/channels/" + gID + "/" + cID
+	headers["x-context-properties"] = "e30="
+
+	pd, er := json.Marshal(CreateChannelPayload{
+		Recipients: []string{id},
+	})
+	if er != nil {
+		return false, "", "", er
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "https://discord.com/api/v9/users/@me/channels", bytes.NewReader(pd))
+	if err != nil {
+		return false, "", "", err
+	}
+
+	req.Header = http.Header{
+		http.HeaderOrderKey: headerOrder,
+	}
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	r, errs := d.Client.Do(req)
+	if errs != nil {
+		return false, "", "", errs
+	}
+
+	s, x := utils.HandleStatusCode(r.StatusCode, "send DM")
+
+	body, er := ioutil.ReadAll(r.Body)
+	if er != nil {
+		return false, "", "", er
+	}
+
+	var data CreateChannelResponse
+	json.Unmarshal(body, &data)
+
+	return s, data.ID, x, nil
+}
+
+func (d *Discord) SendMessage(message string, gID string, cID string) (bool, string, error) {
+	headers := d.Headers
+
+	sx := ""
+	if gID != "" {
+		headers["referer"] = "https://discord.com/channels/" + gID + "/" + cID
+		sx = "send message"
+	} else {
+		headers["referer"] = "https://discord.com/channels/" + cID
+		sx = "send DM"
+	}
+
+	pd, er := json.Marshal(SendMessagePayload{
+		Content: message,
+		Tts:     false,
+	})
+	if er != nil {
+		return false, "", er
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "https://discord.com/api/v9/channels/"+cID+"/messages", bytes.NewReader(pd))
+	if err != nil {
+		return false, "", err
+	}
+
+	req.Header = http.Header{
+		http.HeaderOrderKey: headerOrder,
+	}
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	r, errs := d.Client.Do(req)
+	if errs != nil {
+		return false, "", errs
+	}
+
+	s, x := utils.HandleStatusCode(r.StatusCode, sx)
+
+	return s, x, nil
+}
+
+func (d *Discord) ChangeDisplayName(name string) (bool, string, error) {
+	pd, er := json.Marshal(DisplayNamePayload{
+		GlobalName: name,
+	})
+	if er != nil {
+		return false, "", er
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, "https://discord.com/api/v9/users/@me", bytes.NewReader(pd))
+	if err != nil {
+		return false, "", err
+	}
+
+	req.Header = http.Header{
+		http.HeaderOrderKey: headerOrder,
+	}
+
+	for k, v := range d.Headers {
+		req.Header.Set(k, v)
+	}
+
+	r, errs := d.Client.Do(req)
+	if errs != nil {
+		return false, "", errs
+	}
+
+	s, x := utils.HandleStatusCode(r.StatusCode, "change display name")
+
+	return s, x, nil
+}
+
+func (d *Discord) ChangeBio(bio string) (bool, string, error) {
+	pd, er := json.Marshal(BioPayload{
+		Bio: bio,
+	})
+	if er != nil {
+		return false, "", er
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, "https://discord.com/api/v9/users/@me", bytes.NewReader(pd))
+	if err != nil {
+		return false, "", err
+	}
+
+	req.Header = http.Header{
+		http.HeaderOrderKey: headerOrder,
+	}
+
+	for k, v := range d.Headers {
+		req.Header.Set(k, v)
+	}
+
+	r, errs := d.Client.Do(req)
+	if errs != nil {
+		return false, "", errs
+	}
+
+	s, x := utils.HandleStatusCode(r.StatusCode, "change bio")
+
+	return s, x, nil
 }
 
 func (d *Discord) CheckToken() (bool, error) {

@@ -2,8 +2,6 @@ package utils
 
 import (
 	"bufio"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -13,7 +11,6 @@ import (
 	"time"
 
 	cns "github.com/mciem/GoDMT/internal/console"
-	"github.com/mciem/GoDMT/internal/discord"
 )
 
 type Cycle struct {
@@ -204,18 +201,6 @@ func HandleError(err error) bool {
 	return false
 }
 
-func BuildXContext(invD discord.InviteData) string {
-	pd, _ := json.Marshal(XContext{
-		Location:            "Join Guild",
-		LocationGuildID:     invD.Guild.ID,
-		LocationChannelID:   invD.Channel.ID,
-		LocationChannelType: invD.Channel.Type,
-	})
-
-	return base64.RawStdEncoding.EncodeToString(pd)
-
-}
-
 func HandleStatusCode(s int, x string) (bool, string) {
 	switch s {
 	case 200, 201, 203, 204:
@@ -234,6 +219,10 @@ func HandleStatusCode(s int, x string) (bool, string) {
 	case 403:
 		{
 			return false, "token locked"
+		}
+	case 429:
+		{
+			return false, "ratelimited"
 		}
 	default:
 		{

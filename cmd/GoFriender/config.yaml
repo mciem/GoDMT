@@ -1,0 +1,9 @@
+friender:
+  retries: 3
+  sleep: 1
+  invite: "JP6S5JWY"
+
+  blacklistID: ["976377891254317086", "1148242857380032563"]
+
+joiner:
+  sleep: 3
